@@ -1,0 +1,64 @@
+---
+- hosts: owncloud_nodes
+  become: yes
+  vars:
+    owncloud_archive_url: https://download.owncloud.org/community/6/owncloud-6.0.9.tar.bz2
+    database_name: adsk_owncloud
+    database_user: root
+    database_password: ''
+    database_host: localhost
+  tasks:
+    - name: "Install http server"
+      yum:
+        name: httpd
+        state: latest
+    - name: "instal php module"
+      yum:
+        name: "{{item}}"
+        state: latest
+      with_items:
+        - php
+        - php-mysql
+        - php-curl
+        - php-gd
+        - php-xml
+        - php-dom
+        - php-mbstring
+    - name: "Install mariadb dependencies"
+      yum:
+        name: ["mariadb", "mariadb-server", "MySQL-python"]
+        state: latest
+    - name: "Restart mariadb"  
+      service:
+        name: mariadb
+        state: restarted
+    - name: "download owncloud"
+      get_url:
+        url: "{{owncloud_archive_url}}"
+        dest: ~/owncloud.tar.gz
+    - name: "Unpack owncloud archive"
+      unarchive:
+        src: ~/owncloud.tar.gz
+        dest: /var/www/
+        remote_src: yes
+    - name: "set up owncloud database"
+      mysql_db:
+        name: "{{database_name}}"
+        state: present
+    - name: "configure apache vhost"
+      template:
+        src: templates/vhosts.conf
+        dest: /etc/httpd/conf.d/cloud.conf
+    - name: "start httpd server"
+      service:
+        name: httpd
+        state: restarted
+    - name: "copy owncloud"
+      template:
+        src: templates/oc-config.php
+        dest: /var/www/owncloud/oc-config.php
+    - name: "solve problem: Can't create data directory"
+      file:
+        dest: /var/www/owncloud/
+        owner: apache
+        group: apache
